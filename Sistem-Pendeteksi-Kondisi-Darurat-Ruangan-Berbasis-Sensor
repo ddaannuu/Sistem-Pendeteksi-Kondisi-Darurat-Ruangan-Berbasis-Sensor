@@ -8,8 +8,8 @@
 #include <ArduinoJson.h>
 
 
-// Port kabel
-#define PIR D8
+// Port pin kabel
+#define PIR D3
 #define DHTPIN D4
 #define DHTTYPE DHT11
 #define MQ2PIN A0
@@ -26,26 +26,26 @@ float temp, gasV, hum;
 
 int suhuTerakhir = 0.0;
 int batasGas = 300;
-int suhuDarurat = 40;
+int suhuDarurat = 38;
 bool buzzeract = false;
 int entitas = 0;
 
-
 const char* ssid = "";
 const char* password = "";
-
 const char* botToken = "";
 const char*  chatID= "";
+
 WiFiClientSecure client;
 UniversalTelegramBot bot(botToken, client);
 
 unsigned long lastTelegramTime = 0;         // Waktu terakhir pengiriman pesan
-const unsigned long telegramInterval = 2000; // Interval pengiriman pesan (30 detik)
+const unsigned long telegramInterval = 1000; // Interval pengiriman pesan (1 detik)
 
 // Flag untuk memastikan pesan hanya terkirim sekali
 bool gasAlertSent = false;
 bool suhuAlertSent = false;
 bool motionAlertSent = false;
+bool teleSentMotion=true;
 
 void setup() {
   Serial.begin(9600);
@@ -61,7 +61,17 @@ void setup() {
   lcd.init();
   lcd.backlight();
   lcd.setCursor(0, 0);
+  lcd.print("Starting.");
+  delay(250);
+  lcd.setCursor(0, 0);
+  lcd.print("Starting..");
+  delay(250);
+  lcd.setCursor(0, 0);
+  lcd.print("Starting...");
+  delay(250);
+  lcd.setCursor(0, 0);
   lcd.print("Starting....");
+  delay(250);
   lcd.setCursor(0, 1);
   lcd.print("Kelompok 1");
   delay(2000);
@@ -71,13 +81,14 @@ void setup() {
   pinMode(buzz, OUTPUT);
   pinMode(rLed, OUTPUT);
   pinMode(bLed, OUTPUT);
-  bot.sendMessage(chatID, "🤖 Gunakan:\n/monitoring - Mulai monitoring ruangan sekitar\n", "");
+  bot.sendMessage(chatID, "🤖 Bot siap! Gunakan:\n/monitoring - Mulai monitoring\n/startmotion - Aktifkan sensor gerakan\n/stopmotion - Mematikan sensor gerakan", "");
+  bareng3(1);
   lcd.clear();
 }
 
 void sendTelegramAlert(String message) {
   if (millis() - lastTelegramTime > telegramInterval) {
-    bot.sendMessage(chatID, message, "Markdown");
+    bot.sendMessage("5344849595", message, "Markdown");
     lastTelegramTime = millis();
     Serial.println("Telegram Alert Sent: " + message);
   }
@@ -101,6 +112,19 @@ void bareng2(int times) {
     delay(100);
     digitalWrite(buzz, LOW);
     digitalWrite(bLed, LOW);
+    delay(100);
+  }
+}
+
+void bareng3(int times) {
+  for (int i = 0; i < times; i++) {
+    digitalWrite(buzz, HIGH);
+    digitalWrite(bLed, HIGH);
+    digitalWrite(rLed, HIGH);
+    delay(100);
+    digitalWrite(buzz, LOW);
+    digitalWrite(bLed, LOW);
+    digitalWrite(rLed, LOW);
     delay(100);
   }
 }
@@ -129,34 +153,53 @@ void displayDataOnLCD() {
 }
 
 void checking(){
+
+  if(teleSentMotion==1){
+    if (sensor == HIGH && !motionAlertSent) 
+    {
+      sendTelegramAlert("⚠️ Peringatan: Gerakan terdeteksi! Gerakan : " + String(entitas+1));
+      entitas++;
+      motionAlertSent = true;
+      bareng(3);
+    } 
+    else if (sensor == LOW)
+    {
+      motionAlertSent = false;
+    }
+  }
   if (gasV >= batasGas && !gasAlertSent) {
     gasAlertSent = true;
-    sendTelegramAlert("⚠️ Peringatan: Gas dan Asap berbahaya terdeteksi! Gas : " + String(gasV) + "%");
+    sendTelegramAlert("⚠️ Peringatan: Gas dan Asap berbahaya terdeteksi💨! Gas : " + String(gasV) + "%");
+    lcd.clear();
+    lcd.setCursor(4,0);
+    lcd.print("GAS/ASAP");
+    lcd.setCursor(2,1);
+    lcd.print("TERDETEKSI!!!");
     bareng(60);
-  } else if (gasV < batasGas) {
+  } 
+  
+  else if (gasV < batasGas) 
+  {
     gasAlertSent = false; // Reset flag jika kondisi aman
   }
 
   // Deteksi suhu berbahaya
   if (temp >= suhuDarurat && !suhuAlertSent) {
-    sendTelegramAlert("⚠️ Peringatan: Suhu terlalu tinggi! Suhu : " + String(temp) + "°C");
+    sendTelegramAlert("⚠️ Peringatan: Suhu terlalu tinggi🔥! Suhu : " + String(temp) + "°C");
     suhuAlertSent = true;
+    lcd.clear();
+    lcd.setCursor(2,0);
+    lcd.print("SUHU RUANGAN");
+    lcd.setCursor(0,1);
+    lcd.print("TERLALU PANAS!!");
     bareng(60);
   } else if (temp < suhuDarurat) {
     suhuAlertSent = false; // Reset flag jika suhu kembali normal
   }
 
   // Deteksi gerakan
-  if (sensor == HIGH && !motionAlertSent) {
-    sendTelegramAlert("⚠️ Peringatan: Gerakan terdeteksi! Gerakan : " + String(entitas));
-    entitas++;
-    motionAlertSent = true;
-    bareng2(3);
-  } else if (sensor == LOW) {
-    motionAlertSent = false;
-  }
 
-    if (temp >= suhuTerakhir + 2 || temp < suhuTerakhir) 
+  if (temp >= suhuTerakhir + 2 || temp < suhuTerakhir) 
   {
     suhuTerakhir = temp;
     buzzeract = false;
@@ -164,32 +207,38 @@ void checking(){
 
   if (temp >= suhuTerakhir + 1) 
   {
-    sendTelegramAlert("⚠️ Suhu naik! Suhu : " + String(temp) + "°C");
-    bareng(1);
+    sendTelegramAlert("⬆️ Suhu naik! Suhu : " + String(temp) + "°C");
+    lcd.clear();
+    lcd.setCursor(3,0);
+    lcd.print("SUHU NAIK");
+    bareng2(1);
     suhuTerakhir = temp;
     buzzeract=true;
   }
   else if (temp < suhuTerakhir)
   {
-    sendTelegramAlert("⚠️ Suhu Turun! Suhu : " + String(temp) + "°C");
-    bareng(2);
+    sendTelegramAlert("⬇️ Suhu Turun! Suhu : " + String(temp) + "°C");
+    lcd.clear();
+    lcd.setCursor(2,0);  
+    lcd.print("SUHU TURUN");
+    bareng2(2);
   }
-
 }
 
 void sendTelegramMessage() {
-  String message = "Data Sensor:\n";
-  message += "Suhu           : " + String(temp) + " C\n";
-  message += "Kelembaban     : " + String(hum) + " %\n";
-  message += "Gas            : " + String(gasV) + " %\n";
-  message += "Gerakan        : " + String(entitas);
+  String message = "DATA MONITORING :\n";
+  message += "Suhu               : " + String(temp) + " C\n";
+  message += "Kelembaban  : " + String(hum) + " %\n";
+  message += "Gas                 : " + String(gasV) + " %\n";
+  message += "Gerakan         : " + String(entitas);
 
   if (millis() - lastTelegramTime > telegramInterval) {
-    bot.sendMessage("5344849595", message, "Markdown");
+    bot.sendMessage(chatID, message, "Markdown");
     lastTelegramTime = millis();
     Serial.println("\n"+message +"\n");
   }  
 }
+
 bool monitoringActive = false;
 
 void processTelegramCommand() {
@@ -205,7 +254,16 @@ void processTelegramCommand() {
         sendTelegramMessage();
         monitoringActive = true;
         sendTelegramAlert("⚠️ Start Monitoring");
-      } else {
+      }
+      else if(text == "/startmotion"){
+        bot.sendMessage(chat_id, "🔄 Sensor Motion menyala! .", "");
+        teleSentMotion=true;
+      }
+      else if(text == "/stopmotion"){
+        bot.sendMessage(chat_id, "🔄 Sensor Motion mati! .", "");
+        teleSentMotion=false;
+      }
+      else {
         bot.sendMessage(chat_id, "🤖 Perintah tidak dikenali. Gunakan:\n/startmonitoring - Mulai monitoring suhu\n/stopmonitoring - Hentikan monitoring suhu", "");
       }
     }
@@ -213,15 +271,11 @@ void processTelegramCommand() {
   }
 }
 
-
-void loop() {
-  
-
+void loop() 
+{  
   sensorData();
   displayDataOnLCD();
   checking();
   processTelegramCommand();
-  // sendTelegramMessage();
-  delay(500); // Delay 1 detik untuk loop
-  
+  delay(500); // Delay 0,5 detik 
 }
